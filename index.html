@@ -403,18 +403,17 @@
         /* =========================================================================
            FIREBASE ONLINE CONFIGURATION & REALTIME DATABASE INITIALIZATION
            ========================================================================= */
-        // ضع بيانات الـ Firebase الخاصة بك هنا بعد إنشائها على موقع فايربيس
         const firebaseConfig = {
-            apiKey: "AIzaSy_YOUR_API_KEY_HERE",
-            authDomain: "your-game.firebaseapp.com",
-            databaseURL: "https://your-game-default-rtdb.firebaseio.com",
-            projectId: "your-game",
-            storageBucket: "your-game.appspot.com",
-            messagingSenderId: "1234567890",
-            appId: "1:123456:web:abcdef"
+            apiKey: "AIzaSyDDshU_UdmZ2G0-2bv9dskRlE_9eTyBp3g",
+            authDomain: "hide-n-seek-91f67.firebaseapp.com",
+            databaseURL: "https://hide-n-seek-91f67-default-rtdb.firebaseio.com",
+            projectId: "hide-n-seek-91f67",
+            storageBucket: "hide-n-seek-91f67.firebasestorage.app",
+            messagingSenderId: "396691032409",
+            appId: "1:396691032409:web:26ad6ba9f490aea36da448",
+            measurementId: "G-QT1QX4CD3R"
         };
 
-        // تهيئة الفايربيس (تأكد من وضع بياناتك الصحيحة في الأعلى ليتم الربط أونلاين)
         let db = null;
         let myPlayerId = 'player_' + Math.random().toString(36).substring(7);
         let onlinePlayersRef = null;
@@ -424,7 +423,6 @@
             firebase.initializeApp(firebaseConfig);
             db = firebase.database();
             onlinePlayersRef = db.ref('match/players/' + myPlayerId);
-            // إزالة بيانات اللاعب عند إغلاق الصفحة
             onlinePlayersRef.onDisconnect().remove();
         } catch (e) {
             console.log("Firebase offline mode or unconfigured. Running local/bot mode.", e);
@@ -873,7 +871,7 @@
                 const baseH = 0.2;
                 const storyH = 5.2;
                 const wallThick = 0.65;
-                const doorW = 5.0; // Wide doorways so bots/players never get stuck
+                const doorW = 5.0;
 
                 const toWorld = (lx, lz) => {
                     const cos = Math.cos(rotY);
@@ -1152,8 +1150,7 @@
             state.player.mesh.position.copy(state.player.position);
             scene.add(state.player.mesh);
 
-            // إرسال بيانات اللاعب الحالي للفايربيس لكي يراه باقي اللاعبين أونلاين
-            if (onlinePlayersRef) {
+            if (onlinePlayersRef && db) {
                 onlinePlayersRef.set({
                     id: myPlayerId,
                     team: state.player.team,
@@ -1164,7 +1161,6 @@
                     isSpectator: false
                 });
 
-                // الاستماع للاعبين الآخرين المتصلين أونلاين عبر العالم
                 db.ref('match/players').on('value', (snapshot) => {
                     const data = snapshot.val() || {};
                     onlinePlayersData = data;
@@ -1191,7 +1187,6 @@
                         }
                     });
 
-                    // إزالة اللاعبين الذين خرجوا من اللعبة
                     Object.keys(state.onlineRemoteMeshes).forEach(id => {
                         if (!data[id]) {
                             scene.remove(state.onlineRemoteMeshes[id]);
@@ -1204,7 +1199,6 @@
             state.bots.forEach(b => scene.remove(b.mesh));
             state.bots = [];
 
-            // تفعيل البوتات لتكملة الحماس في حال لم يوجد لاعبون كفاية أونلاين
             const totalSeekers = CONFIG.seekerCount;
             const totalHiders = Math.max(1, CONFIG.totalPlayers - totalSeekers);
             const hidersToSpawn = state.player.team === 'red' ? totalHiders - 1 : totalHiders;
@@ -1760,15 +1754,14 @@
             state.player.position.y = targetY;
             state.player.mesh.position.copy(state.player.position);
 
-            // تحديث موقع اللاعب الحالي أونلاين على Firebase بشكل سلس
-            if (onlinePlayersRef) {
+            if (onlinePlayersRef && db) {
                 onlinePlayersRef.update({
                     x: state.player.position.x,
                     y: state.player.position.y,
                     z: state.player.position.z,
                     rotY: state.player.mesh.rotation.y,
                     isSpectator: state.player.isSpectator
-                });
+                }).catch(() => {});
             }
 
             const promptEl = document.getElementById('action-prompt');
@@ -1895,44 +1888,6 @@
             return desiredDir;
         }
 
-        function triggerBotLootedAbility(bot) {
-            const ability = bot.lootedAbility;
-            if (!ability) return;
-
-            bot.lootedAbility = null;
-            audioFX.playAbility();
-
-            if (ability.id === ABILITIES.GHOST_CLOAK.id) {
-                bot.activeBuffs['cloak'] = true;
-                bot.mesh.visible = false;
-                setTimeout(() => {
-                    delete bot.activeBuffs['cloak'];
-                    bot.mesh.visible = true;
-                }, ABILITIES.GHOST_CLOAK.duration * 1000);
-            }
-            else if (ability.id === ABILITIES.TIME_SHIELD.id) {
-                bot.activeBuffs['shield'] = true;
-                setTimeout(() => delete bot.activeBuffs['shield'], ABILITIES.TIME_SHIELD.duration * 1000);
-            }
-            else if (ability.id === ABILITIES.DECOY_TRAP.id) {
-                spawnDecoy(bot.mesh.position, 'red');
-            }
-            else if (ability.id === ABILITIES.SPEED_BOOST.id) {
-                bot.speed = bot.baseSpeed * 2.0;
-                setTimeout(() => bot.speed = bot.baseSpeed, ABILITIES.SPEED_BOOST.duration * 1000);
-            }
-            else if (ability.id === ABILITIES.SONAR_PING.id) {
-                bot.activeBuffs['sonar'] = true;
-                setTimeout(() => delete bot.activeBuffs['sonar'], ABILITIES.SONAR_PING.duration * 1000);
-            }
-            else if (ability.id === ABILITIES.STUN_TRAP.id) {
-                if (state.player.team === 'red' && !state.player.isSpectator && state.player.position.distanceTo(bot.mesh.position) < 18) {
-                    state.player.speed = state.player.baseSpeed * 0.35;
-                    setTimeout(() => state.player.speed = state.player.baseSpeed, 3500);
-                }
-            }
-        }
-
         function updateBotAI(delta) {
             const mapLimit = (CONFIG.mapSize / 2) - 5;
 
@@ -1956,7 +1911,6 @@
                     activeRedPositions.push(b.position);
                 }
             });
-            // دمج مواقع اللاعبين الآخرين أونلاين في ذكاء البوتات
             Object.keys(onlinePlayersData).forEach(id => {
                 if (id === myPlayerId) return;
                 const p = onlinePlayersData[id];
@@ -1983,8 +1937,6 @@
                     activeBluePositions.push(new THREE.Vector3(p.x, p.y, p.z));
                 }
             });
-
-            const blueSeekers = state.bots.filter(b => b.team === 'blue' && !b.isSpectator);
 
             state.bots.forEach(bot => {
                 if (bot.isSpectator) return;
@@ -2331,9 +2283,784 @@
         window.onload = function() {
             initThree();
             setupInputs();
-            initMatch();
             animate();
         };
     </script>
+
+<!-- =========================================================================
+     ONLINE LOBBY & ROOMS SYSTEM (AMONG US STYLE + LIVE EVENT SYNC)
+     ========================================================================= -->
+<div id="online-lobby-modal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-5xl rounded-2xl p-6 flex flex-col gap-5 max-h-[92vh] overflow-y-auto border-cyan-500/40">
+        <!-- Header -->
+        <div class="flex flex-wrap justify-between items-center gap-3 border-b border-slate-700 pb-4">
+            <div>
+                <h2 class="text-3xl sm:text-4xl font-bold font-pixel text-cyan-400 tracking-wider">
+                    <i class="fa-solid fa-globe mr-2"></i>ONLINE ROOMS LOBBY
+                </h2>
+                <p class="text-sm font-pixel text-slate-400">Create a room, join open rooms in one click, or enter by room code</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <span id="lobby-fb-status" class="px-3 py-1 rounded-full text-xs font-pixel bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                    CHECKING FIREBASE...
+                </span>
+                <button id="btn-offline-solo" class="glass-button px-4 py-2 rounded-xl font-pixel text-lg text-emerald-300 border-emerald-500/40">
+                    <i class="fa-solid fa-robot mr-1"></i>SOLO / OFFLINE
+                </button>
+            </div>
+        </div>
+
+        <!-- Player Name & Quick Join by Code -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="glass-panel p-3 rounded-xl flex flex-col gap-1">
+                <label class="text-xs font-pixel text-cyan-300 uppercase">Your Nickname</label>
+                <input id="lobby-player-name" type="text" maxlength="16" value="Shahoob"
+                    class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-pixel text-xl focus:outline-none focus:border-cyan-400">
+            </div>
+
+            <div class="glass-panel p-3 rounded-xl flex flex-col gap-1">
+                <label class="text-xs font-pixel text-yellow-300 uppercase">Join by Room Code</label>
+                <div class="flex gap-2">
+                    <input id="lobby-join-code" type="text" maxlength="8" placeholder="EX: HS7K9P"
+                        class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-yellow-300 uppercase font-pixel text-xl focus:outline-none focus:border-yellow-400">
+                    <button id="btn-join-by-code" class="glass-button bg-yellow-600/80 hover:bg-yellow-500 text-black font-bold px-4 rounded-lg font-pixel text-lg">
+                        JOIN
+                    </button>
+                </div>
+            </div>
+
+            <div class="glass-panel p-3 rounded-xl flex flex-col justify-between gap-2">
+                <span class="text-xs font-pixel text-emerald-300 uppercase">Host New Room</span>
+                <button id="btn-open-create-room" class="glass-button bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2 px-4 rounded-xl font-pixel text-xl">
+                    <i class="fa-solid fa-plus-circle mr-2"></i>CREATE ROOM
+                </button>
+            </div>
+        </div>
+
+        <!-- Create Room Form (Hidden by default) -->
+        <div id="create-room-panel" class="hidden glass-panel p-4 rounded-xl border-cyan-400/60 flex flex-col gap-3">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xl font-pixel text-cyan-300 uppercase">New Room Setup</h3>
+                <button id="btn-cancel-create-room" class="text-slate-400 hover:text-white font-pixel text-2xl">&times;</button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <input id="new-room-name" type="text" maxlength="24" placeholder="Room Name (e.g. Shahoob Squad)"
+                    class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-pixel text-lg">
+                <select id="new-room-role" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-pixel text-lg">
+                    <option value="blue">Start as Seeker (Blue)</option>
+                    <option value="red">Start as Hider (Red)</option>
+                </select>
+                <button id="btn-confirm-create-room" class="glass-button bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-lg font-pixel text-xl">
+                    CREATE & ENTER
+                </button>
+            </div>
+        </div>
+
+        <!-- Room Waiting View (When inside a room before match starts) -->
+        <div id="room-waiting-panel" class="hidden glass-panel p-4 rounded-xl border-emerald-400/60 flex flex-col gap-4">
+            <div class="flex flex-wrap justify-between items-center gap-2 border-b border-slate-700 pb-3">
+                <div>
+                    <span class="text-xs font-pixel text-slate-400">ROOM CODE:</span>
+                    <span id="waiting-room-code" class="text-2xl font-pixel text-yellow-400 font-bold mx-2">------</span>
+                    <button id="btn-copy-room-code" class="glass-button px-2 py-1 rounded text-xs font-pixel text-cyan-300">
+                        <i class="fa-solid fa-copy mr-1"></i>COPY
+                    </button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="btn-switch-room-team" class="glass-button px-3 py-1 rounded-lg font-pixel text-lg text-cyan-300">
+                        SWITCH TEAM
+                    </button>
+                    <button id="btn-waiting-leave" class="glass-button bg-red-900/60 hover:bg-red-700 px-3 py-1 rounded-lg font-pixel text-lg text-red-200">
+                        LEAVE
+                    </button>
+                    <button id="btn-host-start-match" class="glass-button bg-emerald-600 hover:bg-emerald-500 px-5 py-1 rounded-lg font-pixel text-xl font-bold text-white">
+                        <i class="fa-solid fa-play mr-1"></i>START MATCH
+                    </button>
+                </div>
+            </div>
+
+            <div>
+                <h4 class="text-lg font-pixel text-cyan-300 mb-2">PLAYERS IN ROOM (<span id="waiting-player-count">0</span>)</h4>
+                <div id="waiting-players-list" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2"></div>
+            </div>
+        </div>
+
+        <!-- Public Open Rooms List (Among Us Style One-Click Join) -->
+        <div id="public-rooms-section" class="flex flex-col gap-2">
+            <div class="flex justify-between items-center">
+                <h3 class="text-2xl font-pixel text-emerald-400 uppercase">
+                    <i class="fa-solid fa-door-open mr-2"></i>OPEN ROOMS LIST
+                </h3>
+                <span class="text-xs font-pixel text-slate-400">Click JOIN on any open room</span>
+            </div>
+            <div id="public-rooms-list" class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-64 overflow-y-auto pr-1">
+                <div class="glass-panel p-4 rounded-xl text-slate-400 font-pixel text-lg col-span-2 text-center">
+                    Loading open rooms...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const RoomPatch = {
+        roomCode: null,
+        isHost: false,
+        roomRef: null,
+        playersRef: null,
+        eventsRef: null,
+        roomsListRef: null,
+        playerName: (localStorage.getItem('shahoob_hs_name') || 'Shahoob'),
+        latestRoomMeta: null,
+        latestRoomPlayers: {},
+        syncedCrateIds: new Set(),
+        lastSyncedPhase: null,
+        lastSyncedEndFlag: null
+    };
+
+    function isFirebaseConfigured() {
+        return typeof db !== 'undefined' && db !== null &&
+            typeof firebaseConfig !== 'undefined' &&
+            firebaseConfig.databaseURL &&
+            !firebaseConfig.databaseURL.includes('your-game-default-rtdb');
+    }
+
+    function ensureLobbyReturnButtonInHUD() {
+        if (document.getElementById('btn-open-lobby')) return;
+        const settingsBtn = document.getElementById('btn-settings');
+        if (!settingsBtn || !settingsBtn.parentElement) return;
+        const btn = document.createElement('button');
+        btn.id = 'btn-open-lobby';
+        btn.className = 'glass-button p-3 rounded-xl flex items-center gap-2 text-cyan-300 border-cyan-500/40';
+        btn.title = 'Open Rooms Lobby';
+        btn.innerHTML = '<i class="fa-solid fa-globe"></i><span class="text-sm uppercase hidden sm:inline font-pixel">Lobby</span>';
+        settingsBtn.parentElement.insertBefore(btn, settingsBtn);
+        btn.addEventListener('click', () => {
+            openLobbyModal();
+        });
+    }
+
+    function ensureLeaveButtonInHUD() {
+        if (document.getElementById('btn-leave-room')) return;
+        const settingsBtn = document.getElementById('btn-settings');
+        if (!settingsBtn || !settingsBtn.parentElement) return;
+        const btn = document.createElement('button');
+        btn.id = 'btn-leave-room';
+        btn.className = 'glass-button p-3 rounded-xl flex items-center gap-2 text-red-400 border-red-500/40 hidden';
+        btn.title = 'Leave Room';
+        btn.innerHTML = '<i class="fa-solid fa-right-from-bracket"></i><span class="text-sm uppercase hidden sm:inline font-pixel">Leave Room</span>';
+        settingsBtn.parentElement.appendChild(btn);
+        btn.addEventListener('click', leaveCurrentRoom);
+    }
+
+    function ensureRoomBadgeInHUD() {
+        if (document.getElementById('hud-room-badge')) return;
+        const hudLayer = document.getElementById('hud-layer');
+        if (!hudLayer) return;
+        const badge = document.createElement('div');
+        badge.id = 'hud-room-badge';
+        badge.className = 'hidden self-center glass-panel px-4 py-1 rounded-full border-yellow-400/50 text-sm font-pixel text-yellow-300 pointer-events-auto';
+        badge.innerHTML = 'ROOM: <span id="hud-room-code-val" class="font-bold text-white">----</span>';
+        hudLayer.insertBefore(badge, hudLayer.firstChild);
+    }
+
+    function openLobbyModal() {
+        if (typeof state !== 'undefined' && state.matchTimerInterval) {
+            clearInterval(state.matchTimerInterval);
+        }
+        if (document.pointerLockElement) {
+            try { document.exitPointerLock(); } catch (e) {}
+        }
+        updateFirebaseBadge();
+        listenToPublicRooms();
+        document.getElementById('online-lobby-modal').classList.remove('hidden');
+    }
+
+    function generateRoomCode() {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        let code = 'HS';
+        for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+        return code;
+    }
+
+    function updateFirebaseBadge() {
+        const el = document.getElementById('lobby-fb-status');
+        if (!el) return;
+        if (isFirebaseConfigured()) {
+            el.textContent = 'ONLINE READY (FIREBASE)';
+            el.className = 'px-3 py-1 rounded-full text-xs font-pixel bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+        } else {
+            el.textContent = 'LOCAL PREVIEW (ADD FIREBASE CONFIG)';
+            el.className = 'px-3 py-1 rounded-full text-xs font-pixel bg-amber-500/20 text-amber-300 border border-amber-500/40';
+        }
+    }
+
+    function detachRoomListeners() {
+        if (RoomPatch.roomRef) RoomPatch.roomRef.off();
+        if (RoomPatch.playersRef) RoomPatch.playersRef.off();
+        if (RoomPatch.eventsRef) RoomPatch.eventsRef.off();
+        if (isFirebaseConfigured()) db.ref('match/players').off();
+    }
+
+    function listenToPublicRooms() {
+        const listEl = document.getElementById('public-rooms-list');
+        if (!listEl) return;
+
+        if (!isFirebaseConfigured()) {
+            listEl.innerHTML = '<div class="glass-panel p-4 rounded-xl text-amber-300 font-pixel text-lg col-span-2 text-center">Firebase config is not added yet. You can still test CREATE ROOM locally or click SOLO / OFFLINE.</div>';
+            return;
+        }
+
+        if (RoomPatch.roomsListRef) RoomPatch.roomsListRef.off();
+        RoomPatch.roomsListRef = db.ref('rooms');
+
+        RoomPatch.roomsListRef.on('value', (snap) => {
+            const roomsObj = snap.val() || {};
+            const entries = Object.entries(roomsObj).filter(([code, r]) => r && r.meta && r.players && Object.keys(r.players).length > 0);
+            if (entries.length === 0) {
+                listEl.innerHTML = '<div class="glass-panel p-4 rounded-xl text-slate-400 font-pixel text-lg col-span-2 text-center">No open rooms right now. Click CREATE ROOM to start one!</div>';
+                return;
+            }
+
+            listEl.innerHTML = '';
+            entries.forEach(([code, r]) => {
+                const meta = r.meta;
+                const count = Object.keys(r.players || {}).length;
+                const maxP = meta.maxPlayers || (typeof CONFIG !== 'undefined' ? CONFIG.totalPlayers : 8);
+                const statusText = meta.status === 'playing' ? 'IN MATCH' : 'WAITING';
+                const statusColor = meta.status === 'playing' ? 'text-amber-400' : 'text-emerald-400';
+
+                const card = document.createElement('div');
+                card.className = 'glass-panel p-3 rounded-xl flex justify-between items-center border-cyan-500/30';
+                card.innerHTML = `
+                    <div class="flex flex-col">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl font-pixel text-white font-bold">${escapeHtml(meta.name || ('Room ' + code))}</span>
+                            <span class="px-2 py-0.5 rounded bg-slate-800 text-yellow-300 font-pixel text-sm">${code}</span>
+                        </div>
+                        <span class="text-xs font-pixel ${statusColor}">${statusText} • Players: ${count}/${maxP}</span>
+                    </div>
+                    <button data-join-code="${code}" class="btn-quick-join glass-button bg-emerald-600/80 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg font-pixel text-lg">
+                        JOIN
+                    </button>
+                `;
+                listEl.appendChild(card);
+            });
+
+            listEl.querySelectorAll('.btn-quick-join').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    joinRoom(btn.getAttribute('data-join-code'));
+                });
+            });
+        }, (err) => {
+            listEl.innerHTML = `<div class="glass-panel p-4 rounded-xl text-red-400 font-pixel text-lg col-span-2 text-center">Database error: ${escapeHtml(err.message)}</div>`;
+        });
+    }
+
+    function escapeHtml(str) {
+        return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+
+    function createRoom() {
+        RoomPatch.playerName = (document.getElementById('lobby-player-name').value || 'Shahoob').trim();
+        localStorage.setItem('shahoob_hs_name', RoomPatch.playerName);
+
+        const code = generateRoomCode();
+        const rName = (document.getElementById('new-room-name').value || `${RoomPatch.playerName}'s Room`).trim();
+        const role = document.getElementById('new-room-role').value || 'blue';
+        if (typeof state !== 'undefined') state.playerRole = role;
+
+        RoomPatch.roomCode = code;
+        RoomPatch.isHost = true;
+        RoomPatch.syncedCrateIds.clear();
+        RoomPatch.lastSyncedPhase = null;
+        RoomPatch.lastSyncedEndFlag = null;
+
+        if (!isFirebaseConfigured()) {
+            RoomPatch.latestRoomPlayers = {
+                [myPlayerId]: { id: myPlayerId, name: RoomPatch.playerName, team: role, isHost: true }
+            };
+            renderWaitingPlayers(RoomPatch.latestRoomPlayers);
+            showWaitingRoomUI(code, true);
+            showToast('LOCAL ROOM CREATED: ' + code, 'yellow');
+            return;
+        }
+
+        const roomBase = db.ref('rooms/' + code);
+        roomBase.set({
+            meta: {
+                name: rName,
+                hostId: myPlayerId,
+                status: 'waiting',
+                phase: 1,
+                phaseTimer: typeof CONFIG !== 'undefined' ? CONFIG.hidePhaseTime : 30,
+                maxPlayers: typeof CONFIG !== 'undefined' ? CONFIG.totalPlayers : 8,
+                mapSize: typeof CONFIG !== 'undefined' ? CONFIG.mapSize : 320,
+                seekerCount: typeof CONFIG !== 'undefined' ? CONFIG.seekerCount : 2,
+                winner: null,
+                createdAt: Date.now()
+            },
+            players: {
+                [myPlayerId]: {
+                    id: myPlayerId,
+                    name: RoomPatch.playerName,
+                    team: role,
+                    isHost: true,
+                    x: 0, y: 0.2, z: 0,
+                    rotY: 0,
+                    isSpectator: false
+                }
+            }
+        }).then(() => {
+            roomBase.child('players/' + myPlayerId).onDisconnect().remove();
+            attachRoomListeners(code);
+            showWaitingRoomUI(code, true);
+        }).catch((err) => {
+            showToast('CREATE ROOM FAILED: ' + err.message, 'red');
+        });
+    }
+
+    function joinRoom(code) {
+        const cleanCode = (code || '').trim().toUpperCase();
+        if (!cleanCode) return;
+
+        RoomPatch.playerName = (document.getElementById('lobby-player-name').value || 'Shahoob').trim();
+        localStorage.setItem('shahoob_hs_name', RoomPatch.playerName);
+
+        if (!isFirebaseConfigured()) {
+            showToast('Firebase is not connected!', 'red');
+            return;
+        }
+
+        const roomBase = db.ref('rooms/' + cleanCode);
+        roomBase.once('value', (snap) => {
+            if (!snap.exists() || !snap.val().meta) {
+                showToast('Room not found: ' + cleanCode, 'red');
+                return;
+            }
+
+            const data = snap.val();
+            const meta = data.meta;
+            const players = data.players || {};
+            const currentCount = Object.keys(players).length;
+            const maxP = meta.maxPlayers || 8;
+
+            if (currentCount >= maxP) {
+                showToast('Room is full!', 'red');
+                return;
+            }
+
+            const blueCount = Object.values(players).filter(p => p.team === 'blue').length;
+            const assignedRole = blueCount < (meta.seekerCount || 2) ? 'blue' : 'red';
+            if (typeof state !== 'undefined') state.playerRole = assignedRole;
+
+            RoomPatch.roomCode = cleanCode;
+            RoomPatch.isHost = (meta.hostId === myPlayerId);
+            RoomPatch.syncedCrateIds.clear();
+            RoomPatch.lastSyncedPhase = null;
+            RoomPatch.lastSyncedEndFlag = null;
+
+            const pRef = roomBase.child('players/' + myPlayerId);
+            pRef.set({
+                id: myPlayerId,
+                name: RoomPatch.playerName,
+                team: assignedRole,
+                isHost: RoomPatch.isHost,
+                x: 0, y: 0.2, z: 0,
+                rotY: 0,
+                isSpectator: false
+            });
+            pRef.onDisconnect().remove();
+
+            attachRoomListeners(cleanCode);
+
+            if (meta.status === 'playing') {
+                enterActiveMatchUI(cleanCode);
+                if (typeof initMatch === 'function') initMatch();
+            } else {
+                showWaitingRoomUI(cleanCode, RoomPatch.isHost);
+            }
+        });
+    }
+
+    function showWaitingRoomUI(code, isHost) {
+        document.getElementById('room-waiting-panel').classList.remove('hidden');
+        document.getElementById('create-room-panel').classList.add('hidden');
+        document.getElementById('waiting-room-code').textContent = code;
+        const startBtn = document.getElementById('btn-host-start-match');
+        if (startBtn) startBtn.classList.toggle('hidden', !isHost);
+    }
+
+    function enterActiveMatchUI(code) {
+        document.getElementById('online-lobby-modal').classList.add('hidden');
+        document.getElementById('btn-leave-room').classList.remove('hidden');
+        document.getElementById('hud-room-badge').classList.remove('hidden');
+        document.getElementById('hud-room-code-val').textContent = code;
+    }
+
+    function renderWaitingPlayers(playersObj) {
+        const listEl = document.getElementById('waiting-players-list');
+        const countEl = document.getElementById('waiting-player-count');
+        if (!listEl || !countEl) return;
+
+        const arr = Object.values(playersObj || {});
+        countEl.textContent = arr.length;
+        listEl.innerHTML = '';
+
+        arr.forEach(p => {
+            const teamBadge = p.team === 'blue'
+                ? '<span class="text-cyan-400 font-bold">SEEKER (BLUE)</span>'
+                : '<span class="text-red-400 font-bold">HIDER (RED)</span>';
+            const hostTag = p.isHost ? ' <span class="text-yellow-400">[HOST]</span>' : '';
+            const item = document.createElement('div');
+            item.className = 'bg-slate-900/90 border border-slate-700 rounded-lg px-3 py-2 flex justify-between items-center font-pixel text-lg';
+            item.innerHTML = `<span>${escapeHtml(p.name || p.id)}${hostTag}</span>${teamBadge}`;
+            listEl.appendChild(item);
+        });
+    }
+
+    function attachRoomListeners(code) {
+        detachRoomListeners();
+        if (!isFirebaseConfigured()) return;
+
+        const roomBase = db.ref('rooms/' + code);
+        RoomPatch.roomRef = roomBase.child('meta');
+        RoomPatch.playersRef = roomBase.child('players');
+        RoomPatch.eventsRef = roomBase.child('events');
+
+        RoomPatch.playersRef.on('value', (snap) => {
+            const data = snap.val() || {};
+            RoomPatch.latestRoomPlayers = data;
+            if (typeof onlinePlayersData !== 'undefined') onlinePlayersData = data;
+
+            renderWaitingPlayers(data);
+
+            if (typeof state !== 'undefined' && typeof scene !== 'undefined') {
+                Object.keys(data).forEach(id => {
+                    if (id === myPlayerId) return;
+                    const pData = data[id];
+                    if (!state.onlineRemoteMeshes[id]) {
+                        const rColor = pData.team === 'blue' ? 0x0284c7 : 0xef4444;
+                        const rMesh = createCharacterMesh(rColor);
+                        scene.add(rMesh);
+                        state.onlineRemoteMeshes[id] = rMesh;
+                    }
+                    const remoteMesh = state.onlineRemoteMeshes[id];
+                    if (pData.isSpectator) {
+                        remoteMesh.visible = false;
+                    } else {
+                        remoteMesh.visible = true;
+                        remoteMesh.position.set(pData.x || 0, pData.y || 0.2, pData.z || 0);
+                        remoteMesh.rotation.y = pData.rotY || 0;
+                        if (typeof animateCharacterLimbs === 'function') animateCharacterLimbs(remoteMesh, true, 0.016);
+                    }
+                });
+
+                Object.keys(state.onlineRemoteMeshes).forEach(id => {
+                    if (!data[id]) {
+                        scene.remove(state.onlineRemoteMeshes[id]);
+                        delete state.onlineRemoteMeshes[id];
+                    }
+                });
+            }
+        });
+
+        RoomPatch.roomRef.on('value', (snap) => {
+            const meta = snap.val();
+            if (!meta) return;
+            RoomPatch.latestRoomMeta = meta;
+            RoomPatch.isHost = (meta.hostId === myPlayerId);
+
+            const startBtn = document.getElementById('btn-host-start-match');
+            if (startBtn) startBtn.classList.toggle('hidden', !RoomPatch.isHost);
+
+            if (meta.status === 'playing') {
+                const lobbyHidden = document.getElementById('online-lobby-modal').classList.contains('hidden');
+                if (!lobbyHidden) {
+                    if (typeof CONFIG !== 'undefined') {
+                        if (meta.mapSize) CONFIG.mapSize = meta.mapSize;
+                        if (meta.seekerCount) CONFIG.seekerCount = meta.seekerCount;
+                    }
+                    enterActiveMatchUI(code);
+                    if (typeof initMatch === 'function') initMatch();
+                }
+
+                if (!RoomPatch.isHost && typeof state !== 'undefined' && typeof meta.phase === 'number') {
+                    if (RoomPatch.lastSyncedPhase !== meta.phase) {
+                        RoomPatch.lastSyncedPhase = meta.phase;
+                        state.phase = meta.phase;
+                        if (typeof meta.phaseTimer === 'number') state.phaseTimer = meta.phaseTimer;
+                        if (typeof updateHUDTimer === 'function') updateHUDTimer();
+                    }
+                }
+
+                if (meta.winner && RoomPatch.lastSyncedEndFlag !== meta.winner) {
+                    RoomPatch.lastSyncedEndFlag = meta.winner;
+                    if (typeof endMatch === 'function' && state.phase !== 3) {
+                        endMatch(meta.winner);
+                    }
+                }
+            }
+        });
+
+        RoomPatch.eventsRef.on('child_added', (snap) => {
+            const ev = snap.val();
+            if (!ev || ev.senderId === myPlayerId) return;
+
+            if (ev.type === 'crate_drop' && typeof state !== 'undefined' && typeof scene !== 'undefined') {
+                if (RoomPatch.syncedCrateIds.has(ev.crateId)) return;
+                RoomPatch.syncedCrateIds.add(ev.crateId);
+                const team = ev.team || 'blue';
+                const colorHex = team === 'blue' ? 0x38bdf8 : 0xef4444;
+                const mesh = typeof createSupplyCrateMesh === 'function' ? createSupplyCrateMesh(colorHex) : null;
+                const abilityObj = typeof ABILITIES !== 'undefined' ? Object.values(ABILITIES).find(a => a.id === ev.abilityId) : null;
+                if (mesh && abilityObj) {
+                    mesh.position.set(ev.x, 18, ev.z);
+                    scene.add(mesh);
+                    state.crates.push({ id: ev.crateId, mesh, team, ability: abilityObj, x: ev.x, z: ev.z, isLanding: true });
+                    showToast(`${team.toUpperCase()} SUPPLY CRATE DROPPED!`, team === 'blue' ? 'blue' : 'red');
+                }
+            } else if (ev.type === 'crate_looted' && typeof state !== 'undefined' && typeof scene !== 'undefined') {
+                const idx = state.crates.findIndex(c => c.id === ev.crateId);
+                if (idx > -1) {
+                    scene.remove(state.crates[idx].mesh);
+                    state.crates.splice(idx, 1);
+                }
+            } else if (ev.type === 'player_eliminated') {
+                showToast(`${escapeHtml(ev.targetName || 'A HIDER')} WAS CAPTURED!`, 'red');
+                if (typeof updateHUDCounters === 'function') updateHUDCounters();
+            }
+        });
+    }
+
+    function leaveCurrentRoom() {
+        if (RoomPatch.roomCode && isFirebaseConfigured()) {
+            const code = RoomPatch.roomCode;
+            db.ref(`rooms/${code}/players/${myPlayerId}`).remove();
+            if (RoomPatch.isHost) {
+                const remainingIds = Object.keys(RoomPatch.latestRoomPlayers).filter(id => id !== myPlayerId);
+                if (remainingIds.length > 0) {
+                    db.ref(`rooms/${code}/meta/hostId`).set(remainingIds[0]);
+                } else {
+                    db.ref(`rooms/${code}`).remove();
+                }
+            }
+        }
+        detachRoomListeners();
+        RoomPatch.roomCode = null;
+        RoomPatch.isHost = false;
+
+        if (typeof state !== 'undefined' && typeof scene !== 'undefined') {
+            Object.keys(state.onlineRemoteMeshes || {}).forEach(id => {
+                scene.remove(state.onlineRemoteMeshes[id]);
+                delete state.onlineRemoteMeshes[id];
+            });
+        }
+
+        document.getElementById('btn-leave-room').classList.add('hidden');
+        document.getElementById('hud-room-badge').classList.add('hidden');
+        document.getElementById('room-waiting-panel').classList.add('hidden');
+        document.getElementById('victory-modal').classList.add('hidden');
+        openLobbyModal();
+    }
+
+    function hookEngineFunctions() {
+        if (typeof updatePlayerMovement === 'function') {
+            const origUpdatePlayer = updatePlayerMovement;
+            window.updatePlayerMovement = function (delta) {
+                origUpdatePlayer(delta);
+                if (RoomPatch.roomCode && isFirebaseConfigured() && typeof state !== 'undefined' && state.player && state.player.mesh) {
+                    db.ref(`rooms/${RoomPatch.roomCode}/players/${myPlayerId}`).update({
+                        name: RoomPatch.playerName,
+                        team: state.player.team,
+                        isHost: RoomPatch.isHost,
+                        x: state.player.position.x,
+                        y: state.player.position.y,
+                        z: state.player.position.z,
+                        rotY: state.player.mesh.rotation.y,
+                        isSpectator: state.player.isSpectator
+                    }).catch(() => {});
+                }
+            };
+        }
+
+        if (typeof startMatchTimer === 'function') {
+            const origStartTimer = startMatchTimer;
+            window.startMatchTimer = function () {
+                origStartTimer();
+                if (!RoomPatch.roomCode || !RoomPatch.isHost || !isFirebaseConfigured()) return;
+                const syncInterval = setInterval(() => {
+                    if (!RoomPatch.roomCode || !RoomPatch.isHost || typeof state === 'undefined' || state.phase === 3) {
+                        clearInterval(syncInterval);
+                        return;
+                    }
+                    db.ref(`rooms/${RoomPatch.roomCode}/meta`).update({
+                        phase: state.phase,
+                        phaseTimer: state.phaseTimer
+                    }).catch(() => {});
+                }, 1000);
+            };
+        }
+
+        if (typeof spawnSupplyDrop === 'function') {
+            const origSpawnCrate = spawnSupplyDrop;
+            window.spawnSupplyDrop = function () {
+                if (RoomPatch.roomCode && !RoomPatch.isHost) return;
+                origSpawnCrate();
+                if (RoomPatch.roomCode && RoomPatch.isHost && isFirebaseConfigured() && typeof state !== 'undefined') {
+                    const lastCrate = state.crates[state.crates.length - 1];
+                    if (lastCrate) {
+                        const cId = 'crate_' + Date.now() + '_' + Math.random().toString(36).substring(6);
+                        lastCrate.id = cId;
+                        RoomPatch.syncedCrateIds.add(cId);
+                        db.ref(`rooms/${RoomPatch.roomCode}/events`).push({
+                            type: 'crate_drop',
+                            senderId: myPlayerId,
+                            crateId: cId,
+                            team: lastCrate.team,
+                            abilityId: lastCrate.ability ? lastCrate.ability.id : null,
+                            x: lastCrate.x,
+                            z: lastCrate.z
+                        }).catch(() => {});
+                    }
+                }
+            };
+        }
+
+        if (typeof attemptTagAction === 'function') {
+            const origAttemptTag = attemptTagAction;
+            window.attemptTagAction = function () {
+                const beforeIds = new Set((typeof state !== 'undefined' ? state.crates : []).map(c => c.id).filter(Boolean));
+                origAttemptTag();
+                if (RoomPatch.roomCode && isFirebaseConfigured() && typeof state !== 'undefined') {
+                    const afterIds = new Set(state.crates.map(c => c.id).filter(Boolean));
+                    beforeIds.forEach(id => {
+                        if (!afterIds.has(id)) {
+                            db.ref(`rooms/${RoomPatch.roomCode}/events`).push({
+                                type: 'crate_looted',
+                                senderId: myPlayerId,
+                                crateId: id
+                            }).catch(() => {});
+                        }
+                    });
+                }
+            };
+        }
+
+        if (typeof eliminateHider === 'function') {
+            const origEliminate = eliminateHider;
+            window.eliminateHider = function (hiderBot) {
+                origEliminate(hiderBot);
+                if (RoomPatch.roomCode && isFirebaseConfigured()) {
+                    db.ref(`rooms/${RoomPatch.roomCode}/events`).push({
+                        type: 'player_eliminated',
+                        senderId: myPlayerId,
+                        targetName: 'Red Hider'
+                    }).catch(() => {});
+                }
+            };
+        }
+
+        if (typeof endMatch === 'function') {
+            const origEndMatch = endMatch;
+            window.endMatch = function (winningTeam) {
+                origEndMatch(winningTeam);
+                if (RoomPatch.roomCode && RoomPatch.isHost && isFirebaseConfigured()) {
+                    db.ref(`rooms/${RoomPatch.roomCode}/meta`).update({
+                        winner: winningTeam,
+                        status: 'finished'
+                    }).catch(() => {});
+                }
+            };
+        }
+    }
+
+    function bindLobbyEvents() {
+        document.getElementById('btn-open-create-room').addEventListener('click', () => {
+            document.getElementById('create-room-panel').classList.toggle('hidden');
+        });
+        document.getElementById('btn-cancel-create-room').addEventListener('click', () => {
+            document.getElementById('create-room-panel').classList.add('hidden');
+        });
+        document.getElementById('btn-confirm-create-room').addEventListener('click', createRoom);
+
+        document.getElementById('btn-join-by-code').addEventListener('click', () => {
+            joinRoom(document.getElementById('lobby-join-code').value);
+        });
+        document.getElementById('lobby-join-code').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') joinRoom(e.target.value);
+        });
+
+        document.getElementById('btn-copy-room-code').addEventListener('click', () => {
+            if (!RoomPatch.roomCode) return;
+            navigator.clipboard?.writeText(RoomPatch.roomCode).catch(() => {});
+            showToast('COPIED CODE: ' + RoomPatch.roomCode, 'yellow');
+        });
+
+        document.getElementById('btn-switch-room-team').addEventListener('click', () => {
+            if (typeof state === 'undefined') return;
+            state.playerRole = state.playerRole === 'blue' ? 'red' : 'blue';
+            if (RoomPatch.roomCode && isFirebaseConfigured()) {
+                db.ref(`rooms/${RoomPatch.roomCode}/players/${myPlayerId}/team`).set(state.playerRole);
+            } else if (RoomPatch.latestRoomPlayers[myPlayerId]) {
+                RoomPatch.latestRoomPlayers[myPlayerId].team = state.playerRole;
+                renderWaitingPlayers(RoomPatch.latestRoomPlayers);
+            }
+            showToast('SWITCHED TO ' + state.playerRole.toUpperCase() + ' TEAM', state.playerRole === 'blue' ? 'blue' : 'red');
+        });
+
+        document.getElementById('btn-host-start-match').addEventListener('click', () => {
+            const code = RoomPatch.roomCode || generateRoomCode();
+            RoomPatch.roomCode = code;
+            if (!isFirebaseConfigured()) {
+                enterActiveMatchUI(code);
+                if (typeof initMatch === 'function') initMatch();
+                return;
+            }
+            if (!RoomPatch.isHost) return;
+            db.ref(`rooms/${code}/meta`).update({
+                status: 'playing',
+                phase: 1,
+                phaseTimer: typeof CONFIG !== 'undefined' ? CONFIG.hidePhaseTime : 30,
+                winner: null
+            }).then(() => {
+                enterActiveMatchUI(code);
+                if (typeof initMatch === 'function') initMatch();
+            });
+        });
+
+        document.getElementById('btn-waiting-leave').addEventListener('click', leaveCurrentRoom);
+
+        document.getElementById('btn-offline-solo').addEventListener('click', () => {
+            RoomPatch.playerName = (document.getElementById('lobby-player-name').value || 'Shahoob').trim();
+            localStorage.setItem('shahoob_hs_name', RoomPatch.playerName);
+            RoomPatch.roomCode = null;
+            RoomPatch.isHost = false;
+            detachRoomListeners();
+            document.getElementById('online-lobby-modal').classList.add('hidden');
+            document.getElementById('btn-leave-room').classList.add('hidden');
+            document.getElementById('hud-room-badge').classList.add('hidden');
+            if (typeof initMatch === 'function') initMatch();
+        });
+
+        window.addEventListener('beforeunload', () => {
+            if (RoomPatch.roomCode && isFirebaseConfigured()) {
+                db.ref(`rooms/${RoomPatch.roomCode}/players/${myPlayerId}`).remove();
+            }
+        });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+        ensureLobbyReturnButtonInHUD();
+        ensureLeaveButtonInHUD();
+        ensureRoomBadgeInHUD();
+        updateFirebaseBadge();
+        bindLobbyEvents();
+        hookEngineFunctions();
+        listenToPublicRooms();
+    });
+})();
+</script>
 </body>
 </html>
